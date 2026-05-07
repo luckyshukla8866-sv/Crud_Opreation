@@ -8,20 +8,35 @@ from rest_framework.decorators import api_view
 @api_view(['POST'])
 def create_course(request):
     try:
-        course_name=request.data.get("course")
+        course_name=request.data.get("course_name")
+        student_id=request.data.get("student_id")
 
-        if course_name is None:
+        if course_name is None or student_id is None:
             return Response({
                 "Status":"Failed",
-                "Data":"Please provide the course name"
+                "Data":"Please provide the course name and student id"
             })
-        Course.objects.create(course_name=course_name)
+        
+        if not isinstance(course_name,str):
+            return Response({
+                "Status":"Failed",
+                "Data":"Couese name must be String"
+            })
+        
+        
+        
+        student=Student.objects.get(id=student_id)
+        course=Course.objects.create(course_name=course_name,student=student)
+
         return Response({
             "Status" : "Successfully",
-            "Data": "Successfully created Course"
+            "Data": {
+                "Course_name":course.course_name,
+                "Student":student.name
+            }
         })
 
-    except Course.DoesNOtexoist as e:
+    except Course.DoesNotExist as e:
         return Response({
             "Status":"Failed",
             "Data":str(e)
