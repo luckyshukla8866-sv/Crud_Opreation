@@ -7,19 +7,25 @@ from rest_framework.decorators import api_view
 # Create your views here.
 @api_view(['POST'])
 def create_course(request):
-    serializer = CourseSerializer(data=request.data)
-    
-    if serializer.is_valid():
-        serializer.save()
+    try:
+        course_name=request.data.get("course")
+
+        if course_name is None:
+            return Response({
+                "Status":"Failed",
+                "Data":"Please provide the course name"
+            })
+        Course.objects.create(course_name=course_name)
         return Response({
-            "status": "success",
-            "data": serializer.data
+            "Status" : "Successfully",
+            "Data": "Successfully created Course"
         })
 
-    return Response({
-        "status": "error",
-        "errors": serializer.errors
-    })
+    except Course.DoesNOtexoist as e:
+        return Response({
+            "Status":"Failed",
+            "Data":str(e)
+        })
 
 @api_view(['GET'])
 def get_course(request):
@@ -52,24 +58,19 @@ def update_course(request,id):
                 "Status":"Failed",
                 "Data":"Enter a Valid Id"
             })
-        courese=Course.objects.get(id=id)
+        course=Course.objects.get(id=id)
+        course.course_name=request.data.get('course_name')
+        course.save()
+
+        return Response({
+            "Status":"Successfully",
+            "Data":"Course updated sucessfully"
+        })
+
     except Course.DoesNotExist as e:
         return Response({
             "Status":"Failed",
             "Data":str(e)
-        })
-    serializer=CourseSerializer(courese,data=request.data,partial=(request.method=='PATCH'))
-
-    if serializer.is_valid():
-        serializer.save()
-        return Response({
-            "Status" : "Success",
-            "Data" : serializer.data
-        })
-    else:
-        return Response({
-            "Status" : "Failed",
-            "Errors" : serializer.errors
         })
 
 @api_view(['DELETE'])
@@ -108,7 +109,7 @@ def create_students(request):
         Student.objects.create(name=std_name,age=std_age,email=std_email)
         
         return Response({
-            "status": "Success",
+            "Status": "Successfully",
             "Data": "Successfully created Student"
         })
     
@@ -144,24 +145,20 @@ def update_student(request,id):
             })
         
         students=Student.objects.get(id=id)
+        students.name=request.data.get('name')
+        students.age=request.data.get('age')
+        students.email=request.data.get('email')
+        
+        students.save()
+
+        return Response({
+            "Status":"Success",
+            "Data": "Successfully updates Student"})
 
     except Student.DoesNotExist:
         return Response({
             "Status" : "Failed",
             "Errors": "Student not found"})
-    serializer=StudentSerializer(students,data=request.data,partial=(request.method=='PATCH'))
-
-    if serializer.is_valid():
-        serializer.save()
-        return Response({
-            "Status" : "Success",
-            "Data" : serializer.data
-        })
-    else:
-        return Response({
-            "Status" : "Failed",
-            "Errors" : serializer.errors
-        })
     
     
 @api_view(['DELETE'])
