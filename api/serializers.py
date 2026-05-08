@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from  .models import Student,Course
+from  .models import Student,Course,Employee,Salarylog
 
 
 class CourseSerializer(serializers.ModelSerializer):
@@ -20,4 +20,18 @@ class StudentSerializer(serializers.ModelSerializer):
             "email",
             'courses'
         ]
+
+class EmployeeSerializer(serializers.ModelSerializer):
+    img = serializers.ImageField(use_url=True)
+    class Meta:
+        model=Employee
+        fields= '__all__'
+
+class SalarylogSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Salarylog
+        fields='__all__'
+
+
+
         

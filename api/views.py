@@ -1,10 +1,95 @@
 from django.shortcuts import render
 from rest_framework.response import Response
-from .models import Student, Course
-from .serializers import StudentSerializer,CourseSerializer
+from .models import Student, Course, Employee, Salarylog
+from .serializers import StudentSerializer,CourseSerializer,EmployeeSerializer, SalarylogSerializer
 from rest_framework.decorators import api_view
+from django.db import transaction
 
 # Create your views here.
+@api_view(['POST'])
+@transaction.atomic
+def create_employee(request):
+    try:    
+        name=request.data.get("name")
+        salary=request.data.get("salary")
+        img=request.FILES.get("img")
+
+        employee=Employee.objects.create(emp_name=name,emp_salary=salary,img=img)
+
+        Salarylog.objects.create(employee=employee,amount=salary)
+
+
+        return Response({
+            "Status":"Sucessfully",
+            "Data":"Successfully Employee Created"
+        })
+    except Exception as e :
+        return ({
+            "Status" :"Failed",
+            "Data":str(e)
+        })
+
+@api_view(['GET'])
+def fetch_employee(request):
+    try:
+        data=Employee.objects.all()
+        serializer=EmployeeSerializer(data,many=True,context={'request':request})
+
+        return Response({
+            "Status": "Successfully",
+            "Data": serializer.data
+        })
+
+    
+    except Exception as e:
+        return Response({
+            "Status":"failed",
+            "Data":str(e)
+        })
+    
+@api_view(['PUT','PATCH'])
+@transaction.atomic
+def update_employee(request):
+    id=request.data.get('id')
+
+    if not id:
+        return Response({
+            "Status":"Failed",
+            "Data":"Please Provide requer field(id)"
+        })
+    
+    employee=Employee.objects.get(emp_id=id)
+    employee.emp_name=request.data.get('name')
+    employee.emp_salary=request.data.get('salary')
+    employee.img=request.FILES.get('img')
+
+    employee.save()
+
+    return Response({
+        'Status':"Successfully",
+        "Data":"Updated Sucessully"
+    })
+
+
+@api_view(['DELETE'])
+def delete_employee(request):
+    id = request.data.get('id')
+
+    if not id:
+        return Response({
+            "Status":"Failed",
+            "Data":"Please provide a requesr filed"
+        })
+    
+    employee=Employee.objects.get(emp_id=id)
+    employee.delete()
+    return Response({
+        "Status":"Sucesfully",
+        "Data":f"deleted successfully{employee.emp_id}" 
+    })
+    
+
+        
 @api_view(['POST'])
 def create_course(request):
     try:
@@ -22,9 +107,7 @@ def create_course(request):
                 "Status":"Failed",
                 "Data":"Couese name must be String"
             })
-        
-        
-        
+               
         student=Student.objects.get(id=student_id)
         course=Course.objects.create(course_name=course_name,student=student)
 
@@ -66,13 +149,15 @@ def fetch_all(rerquest):
     })
 
 @api_view(['PUT', 'PATCH'])
-def update_course(request,id):
+def update_course(request):
     try:
+        id = request.data.get("course_id")
         if id is None:
             return Response({
                 "Status":"Failed",
                 "Data":"Enter a Valid Id"
             })
+        
         course=Course.objects.get(id=id)
         course.course_name=request.data.get('course_name')
         course.save()
@@ -89,8 +174,9 @@ def update_course(request,id):
         })
 
 @api_view(['DELETE'])
-def delete_course(request,id):
+def delete_course(request):
     try:
+        id=request.data.get('course_id')
         if id is None:
             return Response({
                 "status":"Falied",
@@ -151,8 +237,9 @@ def get_students(request):
         })
 
 @api_view(['PUT', 'PATCH'])
-def update_student(request,id):
+def update_student(request):
     try:
+        id=request.data.get("id")
         if id is None:
             return Response({
                 "Status" : "Failed",
@@ -177,8 +264,9 @@ def update_student(request,id):
     
     
 @api_view(['DELETE'])
-def delete_student(request,id):
+def delete_student(request):
     try:
+        id=request.data.get('id')
         if id is None:
             return Response({
                 "Status" : "Failed",
