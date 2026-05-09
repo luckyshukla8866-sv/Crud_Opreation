@@ -1,18 +1,21 @@
 from django.shortcuts import render
 from rest_framework.response import Response
-from .models import Student, Course, Employee, Salarylog
+from .models import Student, Course, Employee, Salarylog,EmployeeImage
 from .serializers import StudentSerializer,CourseSerializer,EmployeeSerializer, SalarylogSerializer
 from rest_framework.decorators import api_view
 from django.db import transaction
-
+from django.core.validators import URLValidator
+from django.core.exceptions import ValidationError
+from urllib.parse import urlparse
 # Create your views here.
 @api_view(['POST'])
-def create_employee(request):
-    print("hello From outside")
+@transaction.atomic
+def create_employee(request):   
     try:
         name=request.data.get("name")
         salary=request.data.get("salary")
-        img=request.FILES.get("img")
+        images=request.FILES.getlist("img")
+        new_img=[]
         
         if name is None or salary is None:
             return Response({
@@ -26,41 +29,50 @@ def create_employee(request):
                 "Data":"Name must be String"
             })
         
+        employee=Employee.objects.create(emp_name=name,emp_salary=salary)
 
-        employee=Employee.objects.create(emp_name=name,emp_salary=salary,img=img)
+        for image in images:
+            img=EmployeeImage.objects.create(employee=employee,images=image)
+            new_img.append(request.build_absolute_uri((img.images.url)) if img else None)
+
 
         Salarylog.objects.create(employee=employee,amount=salary)
-
+        
         return Response({
             "Status":"Sucessfully",
-            "Data":"Successfully Employee Created"
+            "Data":{"Name":employee.emp_name,
+                    "Image":new_img}
         })
     
     except Exception as e :
         return Response({
             "Status" :"Failed",
             "Data": str(e)
-        })
+        }) 
 
 @api_view(['GET'])
 def fetch_employee(request):
     try:
-        data=Employee.objects.all()
-        employee=[]
+        employee = Employee.objects.all()
         
-        for item in data:
+        new_employee=[]
+        for item in employee:
+            image=[]
+            for img in item.images.all():
+                image.append(request.build_absolute_uri(img.images.url))
+
             data_dict={
                 "ID":item.emp_id,
                 "Name":item.emp_name,
                 "Salary":item.emp_salary,
-                "Image": request.build_absolute_uri(item.img.url) if item.img else None
+                "Image":image
             }
 
-            employee.append(data_dict)
+            new_employee.append(data_dict)
 
         return Response({
             "Status":"Successfully",
-            "Data":employee
+            "Data":new_employee
         })
 
     except Exception as e:
@@ -68,6 +80,7 @@ def fetch_employee(request):
             "Status":"Failed",
             "Data":str(e)
         })
+
 
 @api_view(['GET'])
 def search_employee(request):
