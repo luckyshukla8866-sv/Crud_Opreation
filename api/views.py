@@ -7,87 +7,205 @@ from django.db import transaction
 
 # Create your views here.
 @api_view(['POST'])
-@transaction.atomic
 def create_employee(request):
-    try:    
+    print("hello From outside")
+    try:
         name=request.data.get("name")
         salary=request.data.get("salary")
         img=request.FILES.get("img")
+        
+        if name is None or salary is None:
+            return Response({
+                    "Status":"Failed",
+                    "Data":"Please Provide requierd fileds(name,salary)"
+                })
+        
+        if not isinstance(name,str):
+            return Response({
+                "Status":"Failed",
+                "Data":"Name must be String"
+            })
+        
 
         employee=Employee.objects.create(emp_name=name,emp_salary=salary,img=img)
 
         Salarylog.objects.create(employee=employee,amount=salary)
 
-
         return Response({
             "Status":"Sucessfully",
             "Data":"Successfully Employee Created"
         })
+    
     except Exception as e :
-        return ({
+        return Response({
             "Status" :"Failed",
-            "Data":str(e)
+            "Data": str(e)
         })
 
 @api_view(['GET'])
 def fetch_employee(request):
     try:
         data=Employee.objects.all()
-        serializer=EmployeeSerializer(data,many=True,context={'request':request})
+        employee=[]
+        
+        for item in data:
+            data_dict={
+                "ID":item.emp_id,
+                "Name":item.emp_name,
+                "Salary":item.emp_salary,
+                "Image": request.build_absolute_uri(item.img.url) if item.img else None
+            }
+
+            employee.append(data_dict)
 
         return Response({
-            "Status": "Successfully",
-            "Data": serializer.data
+            "Status":"Successfully",
+            "Data":employee
         })
+
+    except Exception as e:
+        return Response({
+            "Status":"Failed",
+            "Data":str(e)
+        })
+
+@api_view(['GET'])
+def search_employee(request):
+    try:
+        id=request.data.get("id")
+        name=request.data.get('name')
+
+        if id:
+            if id is None:
+                return Response({
+                    "Status":"Failed",
+                    "Data":"Please Provide requierd fileds(id)"
+                })
+            
+            employee=Employee.objects.get(emp_id=id)
+
+            return Response({
+                "Status":"Search Sucessfull",
+                "Data":{
+                    "Id":employee.emp_id,
+                    "Name":employee.emp_name,
+                    "Salary":employee.emp_salary,
+                    "Image": request.build_absolute_uri(employee.img) if employee.img else None
+                }
+            })
+        elif name:
+            if name is None:
+                return Response({
+                    "Status":"Failed",
+                    "Data":"Please Provide requierd fileds(id)"
+                })
+            
+            employee=Employee.objects.get(emp_name=name)
+
+            return Response({
+                "Status":"Search Sucessfull",
+                "Data":{
+                    "Id":employee.emp_id,
+                    "Name":employee.emp_name,
+                    "Salary":employee.emp_salary,
+                    "Image": request.build_absolute_uri(employee.img) if employee.img else None
+                }
+            })
 
     
     except Exception as e:
         return Response({
-            "Status":"failed",
+            "Status":"Falied",
             "Data":str(e)
         })
-    
+
+
 @api_view(['PUT','PATCH'])
 @transaction.atomic
 def update_employee(request):
-    id=request.data.get('id')
+    try:
+        id=request.data.get('id')
 
-    if not id:
+        if not id:
+            return Response({
+                "Status":"Failed",
+                "Data":"Please Provide requer field(id)"
+            })
+        
+        employee=Employee.objects.get(emp_id=id)
+        employee.emp_name=request.data.get('name')
+        employee.emp_salary=request.data.get('salary')
+        employee.img=request.FILES.get('img')
+
+        employee.save()
+
         return Response({
-            "Status":"Failed",
-            "Data":"Please Provide requer field(id)"
+            'Status':"Successfully",
+            "Data":"Updated Sucessully"
         })
     
-    employee=Employee.objects.get(emp_id=id)
-    employee.emp_name=request.data.get('name')
-    employee.emp_salary=request.data.get('salary')
-    employee.img=request.FILES.get('img')
+    except Exception as e:
+        return Response({
+            "Status":"Failed",
+            "Data":str(e)
+        })
 
-    employee.save()
-
-    return Response({
-        'Status':"Successfully",
-        "Data":"Updated Sucessully"
-    })
 
 
 @api_view(['DELETE'])
 def delete_employee(request):
-    id = request.data.get('id')
+    try:
+        id = request.data.get('id')
+        name=request.data.get('name')
 
-    if not id:
+        if id:
+            if id is None:
+                return Response({
+                    "Status":"Failed",
+                    "Data":"Please Provide requierd fileds(id)"
+                })
+            
+            employee=Employee.objects.get(emp_id=id)
+            employee.delete()
+
+            return Response({
+                "Status":"Deleted Sucessfull",
+                "Data":{
+                    "Id":employee.emp_id,
+                    "Name":employee.emp_name,
+                    "Salary":employee.emp_salary,
+                    "Image": request.build_absolute_uri(employee.img) if employee.img else None
+                }
+            })
+        elif name:
+            if name is None:
+                return Response({
+                    "Status":"Failed",
+                    "Data":"Please Provide requierd fileds(id)"
+                })
+            
+            employee=Employee.objects.get(emp_name=name)
+            employee.delete()
+            return Response({
+                "Status":"Deleted Sucessfull",
+                "Data":{
+                    "Id":employee.emp_id,
+                    "Name":employee.emp_name,
+                    "Salary":employee.emp_salary,
+                    "Image": request.build_absolute_uri(employee.img) if employee.img else None
+                }
+            })
+        
         return Response({
-            "Status":"Failed",
-            "Data":"Please provide a requesr filed"
+            "Status":"Sucesfully",
+            "Data":f"deleted successfully{employee.emp_id}" 
         })
     
-    employee=Employee.objects.get(emp_id=id)
-    employee.delete()
-    return Response({
-        "Status":"Sucesfully",
-        "Data":f"deleted successfully{employee.emp_id}" 
-    })
-    
+    except Exception as e:
+        return Response({
+            "Status":"Failed",
+            "Data":str(e)
+        })
 
         
 @api_view(['POST'])
@@ -119,7 +237,7 @@ def create_course(request):
             }
         })
 
-    except Course.DoesNotExist as e:
+    except Student.DoesNotExist as e:
         return Response({
             "Status":"Failed",
             "Data":str(e)
@@ -127,26 +245,43 @@ def create_course(request):
 
 @api_view(['GET'])
 def get_course(request):
-    courses=Course.objects.all()
-    serializer=CourseSerializer(courses,many=True)
+    try:
+
+        courses=Course.objects.all()
+        serializer=CourseSerializer(courses,many=True)
+
+        return Response({
+            "Status":"Successfully",
+            "Data":serializer.data
+        })
     
-    return Response({
-        "Status":"Successfully",
-        "Data":serializer.data
-    })
+    except Exception as e:
+        return Response({
+            "Status":"Failed",
+            "Data":str(e)
+        })
 
 @api_view(['GET'])
 def fetch_all(rerquest):
-    students=Student.objects.all()
-    courses=Course.objects.all()
-    student_serializer=StudentSerializer(students,many=True)
-    course_serializer=CourseSerializer(courses,many=True)
-   
-    return Response({
-        "Status":"Successfully",
-        "Students":student_serializer.data,
-        "courses":course_serializer.data
-    })
+    try:
+        students=Student.objects.all()
+        courses=Course.objects.all()
+        student_serializer=StudentSerializer(students,many=True)
+        course_serializer=CourseSerializer(courses,many=True)
+
+        return Response({
+            "Status":"Successfully",
+            "Students":student_serializer.data,
+            "courses":course_serializer.data
+        })
+    
+    except Exception as e:
+        return Response({
+            "Status":"Failed",
+            "Data":str(e)
+        })
+    
+
 
 @api_view(['PUT', 'PATCH'])
 def update_course(request):
