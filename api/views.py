@@ -7,6 +7,7 @@ from django.db import transaction
 from django.core.validators import URLValidator
 from django.core.exceptions import ValidationError
 from urllib.parse import urlparse
+from rest_framework import status
 
 # Create your views here.
 @api_view(['POST'])
@@ -18,16 +19,25 @@ def create_employee(request):
         images=request.FILES.getlist("emp_img")
         new_img=[]
         
-        if name is None or salary is None:
+        if name is None:
             return Response({
                     "Status":"Failed",
-                    "Message":"Please Provide requierd fileds(name,salary)"
+                    "Message":"Please Provide requierd fileds name",
+                    "Data":"Not Found"
+                })
+        
+        if  salary is None:
+            return Response({
+                    "Status":"Failed",
+                    "Message":"Please Provide requierd fileds salary",
+                    "Data":"Not Found"
                 })
         
         if not isinstance(name,str):
             return Response({   
                 "Status":"Failed",
-                "Data":"Name must be String"
+                "Message":"Name must be String",
+                "Data":"Not Found"
             })
         
         employee=Employee.objects.create(emp_name=name,emp_salary=salary)
@@ -41,16 +51,18 @@ def create_employee(request):
         
         return Response({
             "Status":"Sucessfully",
+            "Message":"Created Employee Detail",
             "Data":{
                 "Name":employee.emp_name,
                     "Image":new_img
-                    }
-        })
+            }
+        },status=status.HTTP_201_OK)
     
     except Exception as e :
         return Response({
             "Status" :"Failed",
-            "Data": str(e)
+            "Messge": str(e),
+            "Data":"Not Found"
         }) 
 
 @api_view(['GET'])
@@ -75,13 +87,15 @@ def fetch_employee(request):
 
         return Response({
             "Status":"Successfully",
+            "Message":"Employee Detail",
             "Data":new_employee
-        })
+        },status.HTTP_200_OK)
 
     except Exception as e:
         return Response({
             "Status":"Failed",
-            "Data":str(e)
+            "Messsage":str(e),
+            "Data":"Not Found"
         })
 
 
@@ -89,48 +103,114 @@ def fetch_employee(request):
 def search_employee(request):
     try:
         id=request.data.get("emp_id")
-        name=request.data.get('emp_name')
-        
+        name=request.data.get("emp_name")
+
         new_dict={}
         employee=Employee.objects.all()
-        print("Step1")
+        
+
+        print("Step2")
         print(employee)
 
-        if id:
-            employee=Employee.objects.filter(emp_id=id,emp_name=name)
-            print("Step2")
-            print(employee)
-        if name:
-            employee=Employee.objects.filter(emp_name=name)
-            print("Step3")
-            print(employee)
+        if id is not None:
+            # if name == "":
+            #     return Response({
+            #         "Status":"Failed",
+            #         "Message":"Please provide requer id",
+            #         "Data":"Not Found"
+            #     })
 
-        image=[]
-        for img in employee.images.all():
-            image.append(request.build_absolute_uri(img.images.url))
+            print("Step3")
+            employee=Employee.objects.filter(emp_id=id)
+            print("Step4")
+            image=[]
+            for items in employee:
+                    print("Step5")
+                    for img in items.images.all():
+                        print("Step6")
+                        if items.emp_id == img.img_id:
+                            
+                            image.append(request.build_absolute_uri(img.images.url))
+
+                    data_dict={
+                        "Id":items.emp_id,
+                        "Name":items.emp_name,
+                        "Salary":items.emp_salary,
+                        "Images":image
+                    }
+                    print("Step7")
+            print(data_dict)
+            
+        
+            return Response({
+                "Status":"Search sucessfully",
+                "data":data_dict,
+            },status.HTTP_200_OK) 
+                    
+
+        elif name is not None:
+            # if name == "":
+            #     return Response({
+            #         "Status":"Failed",
+            #         "Message":"Please provide requer name",
+            #         "Data":"Not Found"
+            #     })
+            
+
+            employee=Employee.objects.filter(emp_name=name)
+            image=[]
+            for items in employee :
+                for img in items.images.all():
+                    if items.emp_id == img.img_id:
+                        image.append(request.build_absolute_uri(img.images.url))
+                        
+                data_dict={
+                    "Id":employee.emp_id,
+                    "Name":employee.emp_name,
+                    "Salary":employee.emp_salary,
+                    "Images":image
+                }
+                print(data_dict)
+        
+            return Response({
+                "Status":"Search sucessfully",
+                "data":data_dict,
+            },status.HTTP_200_OK) 
+            
+        
+        new_employee=[]
+        for item in employee:
+            image=[]
+            for img in item.images.all():
+                image.append(request.build_absolute_uri(img.images.url))
+
+            data_dict={
+                "ID":item.emp_id,
+                "Name":item.emp_name,
+                "Salary":item.emp_salary,
+                "Image":image
+            }
+
+            new_employee.append(data_dict)
                 
-        data_dict={
-            "Id":employee.emp_id,
-            "Name":employee.emp_name,
-            "Salary":employee.emp_salary,
-            "Images":image
-        }
 
         return Response({
-            "Status":"Search Sucessfull",
-            "Data":data_dict
-        })
+            "Message":"Search Sucessfull", 
+            "Data":new_employee
+        },status.HTTP_200_OK)
     
     except Employee.DoesNotExist:
         return Response({
             "Status":"Failed",
-            "Error":"Employee Not Found"
+            "message":"Employee Not Found",
+            "Data":"Not Found"
         })
     
     except Exception as e:
         return Response({
             "Status":"Falied",
-            "Data":str(e)
+            "Message":str(e),
+            "Data":"Not Found"
         })
 
 
@@ -149,19 +229,29 @@ def update_employee(request):
         employee=Employee.objects.get(emp_id=id)
         employee.emp_name=request.data.get('emp_name')
         employee.emp_salary=request.data.get('emp_salary')
-        employee.images=request.FILES.getlist('emp_img')
+        img=request.FILES.getlist('emp_img')
+        update_img=[]
 
+        for i  in img:
+            new_img=EmployeeImage(employee=employee,images=i)
+            update_img.append(new_img)
+        
+        EmployeeImage.objects.bulk_create(update_img)
+
+        print("Step 2")
         employee.save()
 
         return Response({
             'Status':"Successfully",
-            "Data":"Updated Sucessully"
-        })
+            "Message":"Updated Sucessully",
+            "Data":"Done"
+        },status.HTTP_200_OK)
     
     except Exception as e:
         return Response({
             "Status":"Failed",
-            "Data":str(e)
+            "Message":str(e),
+            "Data":"Not Found"
         })
 
 
@@ -175,14 +265,14 @@ def delete_employee(request):
         if id is None:
             return Response({
                 "Status":"Failed",
-                "Error":"Provide requir fileld"
+                "Message":"Provide requir fileld  id",
+                "Data":"Not Found"
             })
         
         
         employee=Employee.objects.get(emp_id=id)
 
         employee_data={
-            "Status":"Deleted Sucessfull",
             "Data":{
                 "Id":employee.emp_id,
                 "Name":employee.emp_name
@@ -192,14 +282,16 @@ def delete_employee(request):
         employee.delete()
       
         return Response({
-            "Status":"Sucesfully",
-            "Data":f"deleted successfully {employee_data}" 
-        })
+            "Status":"Deleted Sucesfully",
+            "Message":"Remove {employee.emp_name}Employee",
+            "Data": employee_data
+        },status=status.HTTP_204_NO_CONTENT)
     
     except Exception as e:
         return Response({
             "Status":"Failed",
-            "Data":str(e)
+            "Message":str(e),
+            "Data":"Not found"
         })
 
         

@@ -25,6 +25,7 @@ class Employee(models.Model):
         return self.emp_name
     
 class EmployeeImage(models.Model):
+    img_id=models.AutoField(primary_key=True)
     employee=models.ForeignKey(Employee,on_delete=models.CASCADE,related_name="images")
     images=models.ImageField(upload_to='employees/')
 
