@@ -26,7 +26,7 @@ class Employee(models.Model):
     
 class EmployeeImage(models.Model):
     employee=models.ForeignKey(Employee,on_delete=models.CASCADE,related_name="images")
-    images=models.ImageField(upload_to='empployees/')
+    images=models.ImageField(upload_to='employees/')
 
     
 class Salarylog(models.Model):

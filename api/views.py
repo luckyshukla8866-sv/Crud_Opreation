@@ -7,24 +7,25 @@ from django.db import transaction
 from django.core.validators import URLValidator
 from django.core.exceptions import ValidationError
 from urllib.parse import urlparse
+
 # Create your views here.
 @api_view(['POST'])
 @transaction.atomic
 def create_employee(request):   
     try:
-        name=request.data.get("name")
-        salary=request.data.get("salary")
-        images=request.FILES.getlist("img")
+        name=request.data.get("emp_name")
+        salary=request.data.get("emp_salary")
+        images=request.FILES.getlist("emp_img")
         new_img=[]
         
         if name is None or salary is None:
             return Response({
                     "Status":"Failed",
-                    "Data":"Please Provide requierd fileds(name,salary)"
+                    "Message":"Please Provide requierd fileds(name,salary)"
                 })
         
         if not isinstance(name,str):
-            return Response({
+            return Response({   
                 "Status":"Failed",
                 "Data":"Name must be String"
             })
@@ -40,8 +41,10 @@ def create_employee(request):
         
         return Response({
             "Status":"Sucessfully",
-            "Data":{"Name":employee.emp_name,
-                    "Image":new_img}
+            "Data":{
+                "Name":employee.emp_name,
+                    "Image":new_img
+                    }
         })
     
     except Exception as e :
@@ -82,49 +85,47 @@ def fetch_employee(request):
         })
 
 
-@api_view(['GET'])
+@api_view(['POST'])
 def search_employee(request):
     try:
-        id=request.data.get("id")
-        name=request.data.get('name')
+        id=request.data.get("emp_id")
+        name=request.data.get('emp_name')
+        
+        new_dict={}
+        employee=Employee.objects.all()
+        print("Step1")
+        print(employee)
 
         if id:
-            if id is None:
-                return Response({
-                    "Status":"Failed",
-                    "Data":"Please Provide requierd fileds(id)"
-                })
-            
-            employee=Employee.objects.get(emp_id=id)
+            employee=Employee.objects.filter(emp_id=id,emp_name=name)
+            print("Step2")
+            print(employee)
+        if name:
+            employee=Employee.objects.filter(emp_name=name)
+            print("Step3")
+            print(employee)
 
-            return Response({
-                "Status":"Search Sucessfull",
-                "Data":{
-                    "Id":employee.emp_id,
-                    "Name":employee.emp_name,
-                    "Salary":employee.emp_salary,
-                    "Image": request.build_absolute_uri(employee.img) if employee.img else None
-                }
-            })
-        elif name:
-            if name is None:
-                return Response({
-                    "Status":"Failed",
-                    "Data":"Please Provide requierd fileds(id)"
-                })
-            
-            employee=Employee.objects.get(emp_name=name)
+        image=[]
+        for img in employee.images.all():
+            image.append(request.build_absolute_uri(img.images.url))
+                
+        data_dict={
+            "Id":employee.emp_id,
+            "Name":employee.emp_name,
+            "Salary":employee.emp_salary,
+            "Images":image
+        }
 
-            return Response({
-                "Status":"Search Sucessfull",
-                "Data":{
-                    "Id":employee.emp_id,
-                    "Name":employee.emp_name,
-                    "Salary":employee.emp_salary,
-                    "Image": request.build_absolute_uri(employee.img) if employee.img else None
-                }
-            })
-
+        return Response({
+            "Status":"Search Sucessfull",
+            "Data":data_dict
+        })
+    
+    except Employee.DoesNotExist:
+        return Response({
+            "Status":"Failed",
+            "Error":"Employee Not Found"
+        })
     
     except Exception as e:
         return Response({
@@ -137,7 +138,7 @@ def search_employee(request):
 @transaction.atomic
 def update_employee(request):
     try:
-        id=request.data.get('id')
+        id=request.data.get('emp_id')
 
         if not id:
             return Response({
@@ -146,9 +147,9 @@ def update_employee(request):
             })
         
         employee=Employee.objects.get(emp_id=id)
-        employee.emp_name=request.data.get('name')
-        employee.emp_salary=request.data.get('salary')
-        employee.img=request.FILES.get('img')
+        employee.emp_name=request.data.get('emp_name')
+        employee.emp_salary=request.data.get('emp_salary')
+        employee.images=request.FILES.getlist('emp_img')
 
         employee.save()
 
@@ -168,50 +169,31 @@ def update_employee(request):
 @api_view(['DELETE'])
 def delete_employee(request):
     try:
-        id = request.data.get('id')
-        name=request.data.get('name')
+        name = request.data.get("emp_name")
+        id = request.data.get("emp_id")
 
-        if id:
-            if id is None:
-                return Response({
-                    "Status":"Failed",
-                    "Data":"Please Provide requierd fileds(id)"
-                })
-            
-            employee=Employee.objects.get(emp_id=id)
-            employee.delete()
-
+        if id is None:
             return Response({
-                "Status":"Deleted Sucessfull",
-                "Data":{
-                    "Id":employee.emp_id,
-                    "Name":employee.emp_name,
-                    "Salary":employee.emp_salary,
-                    "Image": request.build_absolute_uri(employee.img) if employee.img else None
-                }
-            })
-        elif name:
-            if name is None:
-                return Response({
-                    "Status":"Failed",
-                    "Data":"Please Provide requierd fileds(id)"
-                })
-            
-            employee=Employee.objects.get(emp_name=name)
-            employee.delete()
-            return Response({
-                "Status":"Deleted Sucessfull",
-                "Data":{
-                    "Id":employee.emp_id,
-                    "Name":employee.emp_name,
-                    "Salary":employee.emp_salary,
-                    "Image": request.build_absolute_uri(employee.img) if employee.img else None
-                }
+                "Status":"Failed",
+                "Error":"Provide requir fileld"
             })
         
+        
+        employee=Employee.objects.get(emp_id=id)
+
+        employee_data={
+            "Status":"Deleted Sucessfull",
+            "Data":{
+                "Id":employee.emp_id,
+                "Name":employee.emp_name
+            }
+        }
+
+        employee.delete()
+      
         return Response({
             "Status":"Sucesfully",
-            "Data":f"deleted successfully{employee.emp_id}" 
+            "Data":f"deleted successfully {employee_data}" 
         })
     
     except Exception as e:
