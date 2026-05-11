@@ -23,22 +23,19 @@ def create_employee(request):
             return Response({
                     "Status":"Failed",
                     "Message":"Please Provide requierd fileds name",
-                    "Data":"Not Found"
-                })
+                },status=status.HTTP_204_NO_CONTENT)
         
         if  salary is None:
             return Response({
                     "Status":"Failed",
                     "Message":"Please Provide requierd fileds salary",
-                    "Data":"Not Found"
-                })
+                },status=status.HTTP_204_NO_CONTENT)
         
         if not isinstance(name,str):
             return Response({   
                 "Status":"Failed",
                 "Message":"Name must be String",
-                "Data":"Not Found"
-            })
+            },status=status.HTTP_204_NO_CONTENT)
         
         employee=Employee.objects.create(emp_name=name,emp_salary=salary)
 
@@ -62,8 +59,7 @@ def create_employee(request):
         return Response({
             "Status" :"Failed",
             "Messge": str(e),
-            "Data":"Not Found"
-        }) 
+        },status=status.HTTP_400_BAD_REQUEST) 
 
 @api_view(['GET'])
 def fetch_employee(request):
@@ -95,124 +91,58 @@ def fetch_employee(request):
         return Response({
             "Status":"Failed",
             "Messsage":str(e),
-            "Data":"Not Found"
-        })
+        },status=status.HTTP_400_BAD_REQUEST)
 
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from rest_framework import status
 
 @api_view(['POST'])
 def search_employee(request):
     try:
-        id=request.data.get("emp_id")
-        name=request.data.get("emp_name")
+        emp_id=request.data.get("emp_id")
+        emp_name= request.data.get("emp_name")
+        employees=Employee.objects.prefetch_related('images').all()
 
-        new_dict={}
-        employee=Employee.objects.all()
-        
+        if emp_id:
+            employees= employees.filter(emp_id=emp_id)
 
-        print("Step2")
-        print(employee)
+        elif emp_name:
+            employees= employees.filter(emp_name=emp_name)
 
-        if id is not None:
-            # if name == "":
-            #     return Response({
-            #         "Status":"Failed",
-            #         "Message":"Please provide requer id",
-            #         "Data":"Not Found"
-            #     })
-
-            print("Step3")
-            employee=Employee.objects.filter(emp_id=id)
-            print("Step4")
-            image=[]
-            for items in employee:
-                    print("Step5")
-                    for img in items.images.all():
-                        print("Step6")
-                        if items.emp_id == img.img_id:
-                            
-                            image.append(request.build_absolute_uri(img.images.url))
-
-                    data_dict={
-                        "Id":items.emp_id,
-                        "Name":items.emp_name,
-                        "Salary":items.emp_salary,
-                        "Images":image
-                    }
-                    print("Step7")
-            print(data_dict)
-            
-        
+        if not employees.exists():
             return Response({
-                "Status":"Search sucessfully",
-                "data":data_dict,
-            },status.HTTP_200_OK) 
-                    
+                "Status": "Failed",
+                "Message": "Employee Not Found",
+                "Data": []
+            }, status=status.HTTP_404_NOT_FOUND)
 
-        elif name is not None:
-            # if name == "":
-            #     return Response({
-            #         "Status":"Failed",
-            #         "Message":"Please provide requer name",
-            #         "Data":"Not Found"
-            #     })
-            
+        employee_data = []
 
-            employee=Employee.objects.filter(emp_name=name)
-            image=[]
-            for items in employee :
-                for img in items.images.all():
-                    if items.emp_id == img.img_id:
-                        image.append(request.build_absolute_uri(img.images.url))
-                        
-                data_dict={
-                    "Id":employee.emp_id,
-                    "Name":employee.emp_name,
-                    "Salary":employee.emp_salary,
-                    "Images":image
-                }
-                print(data_dict)
-        
-            return Response({
-                "Status":"Search sucessfully",
-                "data":data_dict,
-            },status.HTTP_200_OK) 
-            
-        
-        new_employee=[]
-        for item in employee:
-            image=[]
-            for img in item.images.all():
-                image.append(request.build_absolute_uri(img.images.url))
+        images=[]
+        for employee in employees:
+            for img in employee.images.all():
+                images.append(request.build_absolute_uri(img.images.url))
+             
 
-            data_dict={
-                "ID":item.emp_id,
-                "Name":item.emp_name,
-                "Salary":item.emp_salary,
-                "Image":image
-            }
-
-            new_employee.append(data_dict)
-                
+            employee_data.append({
+                "Id": employee.emp_id,
+                "Name": employee.emp_name,
+                "Salary": employee.emp_salary,
+                "Images": images
+            })
 
         return Response({
-            "Message":"Search Sucessfull", 
-            "Data":new_employee
-        },status.HTTP_200_OK)
-    
-    except Employee.DoesNotExist:
-        return Response({
-            "Status":"Failed",
-            "message":"Employee Not Found",
-            "Data":"Not Found"
-        })
-    
+            "Status":"Success",
+            "Message":"Search Successful",
+            "Data":employee_data
+        }, status=status.HTTP_200_OK)
+
     except Exception as e:
         return Response({
-            "Status":"Falied",
+            "Status":"Failed",
             "Message":str(e),
-            "Data":"Not Found"
-        })
-
+        }, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['PUT','PATCH'])
 @transaction.atomic
@@ -238,21 +168,18 @@ def update_employee(request):
         
         EmployeeImage.objects.bulk_create(update_img)
 
-        print("Step 2")
         employee.save()
 
         return Response({
             'Status':"Successfully",
             "Message":"Updated Sucessully",
-            "Data":"Done"
         },status.HTTP_200_OK)
     
     except Exception as e:
         return Response({
             "Status":"Failed",
             "Message":str(e),
-            "Data":"Not Found"
-        })
+        },status=status.HTTP_400_BAD_REQUEST)
 
 
 
@@ -292,7 +219,7 @@ def delete_employee(request):
             "Status":"Failed",
             "Message":str(e),
             "Data":"Not found"
-        })
+        }status=status.HTTP_400_BAD_REQUEST)
 
         
 @api_view(['POST'])
