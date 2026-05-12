@@ -8,7 +8,7 @@ from django.core.validators import URLValidator
 from django.core.exceptions import ValidationError
 from urllib.parse import urlparse
 from rest_framework import status
-from .pagination import StudentPagination,EmployeePagination
+from .pagination import StudentPagination,EmployeePagination,EmployeeCursorPagination
 
 # Create your views here.
 @api_view(['POST'])
@@ -61,6 +61,41 @@ def create_employee(request):
             "Status" :"Failed",
             "Messge": str(e),
         },status=status.HTTP_400_BAD_REQUEST) 
+    
+@api_view(['GET'])
+def fetch_cursor_employee(request):
+    try:
+        employee = Employee.objects.all()
+        paginator=EmployeeCursorPagination()
+        padinated_employee=paginator.paginate_queryset(employee,request)
+        new_employee=[]
+
+        for item in padinated_employee:
+            image=[]
+            for img in item.images.all():
+                image.append(request.build_absolute_uri(img.images.url))
+
+            data_dict={
+                "ID":item.emp_id,
+                "Name":item.emp_name,
+                "Salary":item.emp_salary,
+                "Image":image
+            }
+
+            new_employee.append(data_dict)
+
+
+        return paginator.get_paginated_response({
+            "Status": "Success",
+            "Data": new_employee
+        }) 
+
+    except Exception as e:
+        return Response({
+            "Status":"Failed",
+            "Messsage":str(e),
+        },status=status.HTTP_400_BAD_REQUEST)
+
 
 @api_view(['GET'])
 def fetch_employee(request):
@@ -96,9 +131,7 @@ def fetch_employee(request):
             "Messsage":str(e),
         },status=status.HTTP_400_BAD_REQUEST)
 
-from rest_framework.decorators import api_view
-from rest_framework.response import Response
-from rest_framework import status
+
 
 @api_view(['POST'])
 def search_employee(request):

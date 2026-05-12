@@ -17,6 +17,7 @@ urlpatterns = [
     path('fetch-course/',get_course),
     path('fetch-all/',fetch_all),
     path('fetch-employee/',fetch_employee),
+    path('fetch-cursor-employee/',fetch_cursor_employee),
     path('create-employee/',create_employee),
     path('delete-employee/',delete_employee),
     path('update-employee/',update_employee),
