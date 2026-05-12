@@ -8,6 +8,7 @@ from django.core.validators import URLValidator
 from django.core.exceptions import ValidationError
 from urllib.parse import urlparse
 from rest_framework import status
+from .pagination import StudentPagination,EmployeePagination
 
 # Create your views here.
 @api_view(['POST'])
@@ -65,9 +66,11 @@ def create_employee(request):
 def fetch_employee(request):
     try:
         employee = Employee.objects.all()
-        
+        paginator=EmployeePagination()
+        padinated_employee=paginator.paginate_queryset(employee,request)
         new_employee=[]
-        for item in employee:
+
+        for item in padinated_employee:
             image=[]
             for img in item.images.all():
                 image.append(request.build_absolute_uri(img.images.url))
@@ -81,11 +84,11 @@ def fetch_employee(request):
 
             new_employee.append(data_dict)
 
-        return Response({
-            "Status":"Successfully",
-            "Message":"Employee Detail",
-            "Data":new_employee
-        },status.HTTP_200_OK)
+
+        return paginator.get_paginated_response({
+            "Status": "Success",
+            "Data": new_employee
+        }) 
 
     except Exception as e:
         return Response({
@@ -219,9 +222,106 @@ def delete_employee(request):
             "Status":"Failed",
             "Message":str(e),
             "Data":"Not found"
-        }status=status.HTTP_400_BAD_REQUEST)
+        },status=status.HTTP_400_BAD_REQUEST)
 
+    
+@api_view(['POST'])
+def create_students(request):
+    try:
+        std_name = request.data.get('name')
+        std_age=request.data.get('age')
+        std_email=request.data.get('email')
         
+        if std_name is None or std_age is None or std_email is None:
+            return Response({
+                "Status" : "Failed",
+                "Errors":"Please Provide all requierd fileds(name,age,email)"
+            })
+        
+        Student.objects.create(name=std_name,age=std_age,email=std_email)
+        
+        return Response({
+            "Status": "Successfully",
+            "Data": "Successfully created Student"
+        })
+    
+    except Exception as e:
+        return Response({
+            "Status": "Failed",
+            "Errors":str(e)
+        })
+    
+
+@api_view(['GET'])
+def get_students(request):
+    try:
+        students = Student.objects.all()
+
+        paginator=StudentPagination()
+        paginated_student=paginator.paginate_queryset(students,request)
+
+        serializer=StudentSerializer(paginated_student,many=True)
+
+        return paginator.get_paginated_response({
+            "Status": "Success",
+            "Data": serializer.data
+        })
+    
+    except Exception as e:
+        return Response({
+            "Status" : "Failed",
+            "Errors" : str(e)
+        },status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['PUT', 'PATCH'])
+def update_student(request):
+    try:
+        id=request.data.get("id")
+        if id is None:
+            return Response({
+                "Status" : "Failed",
+                "Errors" : "Please provide the student id"
+            })
+        
+        students=Student.objects.get(id=id)
+        students.name=request.data.get('name')
+        students.age=request.data.get('age')
+        students.email=request.data.get('email')
+        
+        students.save()
+
+        return Response({
+            "Status":"Success",
+            "Data": "Successfully updates Student"})
+
+    except Student.DoesNotExist:
+        return Response({
+            "Status" : "Failed",
+            "Errors": "Student not found"})
+    
+    
+@api_view(['DELETE'])
+def delete_student(request):
+    try:
+        id=request.data.get('id')
+        if id is None:
+            return Response({
+                "Status" : "Failed",
+                "Errors" : "Please provide the student id"
+            })
+        
+        students=Student.objects.get(id=id)
+        students.delete()
+        return Response({
+            "Status" : "Success",
+            "Errors" : "Successfully deleted Student"
+        })
+    except Student.DoesNotExist:
+        return Response({
+            "Status" : "Failed",
+            "Errors" : "Student not found"
+        })
+      
 @api_view(['POST'])
 def create_course(request):
     try:
@@ -341,97 +441,6 @@ def delete_course(request):
         return Response({
             "Status":"Failed",
             "Data":str(e)
-        })
-    
-@api_view(['POST'])
-def create_students(request):
-    try:
-        std_name = request.data.get('name')
-        std_age=request.data.get('age')
-        std_email=request.data.get('email')
-        
-        if std_name is None or std_age is None or std_email is None:
-            return Response({
-                "Status" : "Failed",
-                "Errors":"Please Provide all requierd fileds(name,age,email)"
-            })
-        
-        Student.objects.create(name=std_name,age=std_age,email=std_email)
-        
-        return Response({
-            "Status": "Successfully",
-            "Data": "Successfully created Student"
-        })
-    
-    except Exception as e:
-        return Response({
-            "Status": "Failed",
-            "Errors":str(e)
-        })
-    
-
-@api_view(['GET'])
-def get_students(request):
-    try:
-        students = Student.objects.all()
-        serializer=StudentSerializer(students,many=True)
-        return Response({
-            "Status" : "Success",
-            "Data" : serializer.data
-        })
-    except Exception as e:
-        return Response({
-            "Status" : "Failed",
-            "Errors" : str(e)
-        })
-
-@api_view(['PUT', 'PATCH'])
-def update_student(request):
-    try:
-        id=request.data.get("id")
-        if id is None:
-            return Response({
-                "Status" : "Failed",
-                "Errors" : "Please provide the student id"
-            })
-        
-        students=Student.objects.get(id=id)
-        students.name=request.data.get('name')
-        students.age=request.data.get('age')
-        students.email=request.data.get('email')
-        
-        students.save()
-
-        return Response({
-            "Status":"Success",
-            "Data": "Successfully updates Student"})
-
-    except Student.DoesNotExist:
-        return Response({
-            "Status" : "Failed",
-            "Errors": "Student not found"})
-    
-    
-@api_view(['DELETE'])
-def delete_student(request):
-    try:
-        id=request.data.get('id')
-        if id is None:
-            return Response({
-                "Status" : "Failed",
-                "Errors" : "Please provide the student id"
-            })
-        
-        students=Student.objects.get(id=id)
-        students.delete()
-        return Response({
-            "Status" : "Success",
-            "Errors" : "Successfully deleted Student"
-        })
-    except Student.DoesNotExist:
-        return Response({
-            "Status" : "Failed",
-            "Errors" : "Student not found"
         })
 
 
