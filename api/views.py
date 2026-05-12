@@ -100,11 +100,43 @@ def fetch_cursor_employee(request):
 @api_view(['GET'])
 def fetch_employee(request):
     try:
-        employee = Employee.objects.all()
-        paginator=EmployeePagination()
-        padinated_employee=paginator.paginate_queryset(employee,request)
-        new_employee=[]
+        page_number = request.data.get('page_number')
+        page_size = request.data.get('page_size')
 
+        try:
+            page_number = int(page_number)
+            page_size = int(page_size)
+            
+        except ValueError:
+            return Response({
+                "status" : "failed", 
+                "message" : "Page_number and page_size must be integer"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        if page_number <= 0 or page_size <= 0:
+            return Response({
+                "status":"failed" ,
+                "message":"Page and page_size must be greater than 0"
+                },status=400)
+        
+        try:
+            employee = Employee.objects.all()
+        except Employee.DoesNotExist:
+             return Response({
+                 "status":"failed",
+                   "message":"Employee not found"
+                   },status=status.HTTP_404_NOT_FOUND)
+
+        try: 
+            paginator=EmployeePagination()
+            padinated_employee=paginator.paginate_queryset(employee,request)
+        except:
+            return Response({
+                "status":"failed" ,
+                "message": "Page number out of range"
+                },status=status.HTTP_501_NOT_IMPLEMENTED)
+
+        new_employee=[]
         for item in padinated_employee:
             image=[]
             for img in item.images.all():
@@ -129,7 +161,7 @@ def fetch_employee(request):
         return Response({
             "Status":"Failed",
             "Messsage":str(e),
-        },status=status.HTTP_400_BAD_REQUEST)
+        },status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 
