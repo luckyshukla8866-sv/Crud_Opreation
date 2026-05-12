@@ -9,6 +9,8 @@ from django.core.exceptions import ValidationError
 from urllib.parse import urlparse
 from rest_framework import status
 from .pagination import StudentPagination,EmployeePagination,EmployeeCursorPagination
+from django.db.models import Q
+from django.core.paginator import Paginator, EmptyPage
 
 # Create your views here.
 @api_view(['POST'])
@@ -22,21 +24,21 @@ def create_employee(request):
         
         if name is None:
             return Response({
-                    "Status":"Failed",
-                    "Message":"Please Provide requierd fileds name",
-                },status=status.HTTP_204_NO_CONTENT)
+                    "status":"Failed",
+                    "message":"Please Provide requierd fileds name",
+                },status=status.HTTP_404_NOT_FOUND)
         
         if  salary is None:
             return Response({
-                    "Status":"Failed",
-                    "Message":"Please Provide requierd fileds salary",
-                },status=status.HTTP_204_NO_CONTENT)
+                    "status":"Failed",
+                    "message":"Please Provide requierd fileds salary",
+                },status=status.HTTP_404_NOT_FOUND)
         
         if not isinstance(name,str):
             return Response({   
-                "Status":"Failed",
-                "Message":"Name must be String",
-            },status=status.HTTP_204_NO_CONTENT)
+                "status":"Failed",
+                "message":"Name must be String",
+            },status=status.HTTP_404_NOT_FOUND)
         
         employee=Employee.objects.create(emp_name=name,emp_salary=salary)
 
@@ -48,19 +50,15 @@ def create_employee(request):
         Salarylog.objects.create(employee=employee,amount=salary)
         
         return Response({
-            "Status":"Sucessfully",
-            "Message":"Created Employee Detail",
-            "Data":{
-                "Name":employee.emp_name,
-                    "Image":new_img
-            }
-        },status=status.HTTP_201_OK)
+            "status":"Sucessfully",
+            "message":"Created Employee Detail",
+        },status=status.HTTP_201_CREATED)
     
     except Exception as e :
         return Response({
-            "Status" :"Failed",
-            "Messge": str(e),
-        },status=status.HTTP_400_BAD_REQUEST) 
+            "status" :"Error",
+            "messge": str(e),
+        },status=status.HTTP_500_INTERNAL_SERVER_ERROR) 
     
 @api_view(['GET'])
 def fetch_cursor_employee(request):
@@ -92,52 +90,56 @@ def fetch_cursor_employee(request):
 
     except Exception as e:
         return Response({
-            "Status":"Failed",
-            "Messsage":str(e),
-        },status=status.HTTP_400_BAD_REQUEST)
+            "status":"Error",
+            "messsage":str(e),
+        },status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['GET'])
 def fetch_employee(request):
     try:
-        page_number = request.data.get('page_number')
-        page_size = request.data.get('page_size')
+        page_number =request.query_params.get('page',1)       
+        page_size= request.query_params.get('page_size',3)  
 
         try:
             page_number = int(page_number)
             page_size = int(page_size)
-            
+
         except ValueError:
             return Response({
                 "status" : "failed", 
                 "message" : "Page_number and page_size must be integer"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                status=status.HTTP_400_BAD_REQUEST)
         
         if page_number <= 0 or page_size <= 0:
             return Response({
                 "status":"failed" ,
                 "message":"Page and page_size must be greater than 0"
-                },status=400)
+                },status=status.HTTP_400_BAD_REQUEST)
         
-        try:
-            employee = Employee.objects.all()
-        except Employee.DoesNotExist:
-             return Response({
-                 "status":"failed",
-                   "message":"Employee not found"
-                   },status=status.HTTP_404_NOT_FOUND)
+        employee = Employee.objects.all()
 
+        if not employee.exists():
+            return Response({
+                "Status":  "Failed",
+                "Message": "No employees found"
+            }, status=status.HTTP_404_NOT_FOUND)
+        
         try: 
             paginator=EmployeePagination()
-            padinated_employee=paginator.paginate_queryset(employee,request)
+            paginator.page_size=min(page_size, paginator.max_page_size)
+            paginated_employee = paginator.paginate_queryset(employee, request)
         except:
             return Response({
                 "status":"failed" ,
                 "message": "Page number out of range"
-                },status=status.HTTP_501_NOT_IMPLEMENTED)
+                },status=status.HTTP_404_NOT_FOUND)
+
+        if paginated_employee is None:            
+            paginated_employee= list(employee)
 
         new_employee=[]
-        for item in padinated_employee:
+        for item in paginated_employee:
             image=[]
             for img in item.images.all():
                 image.append(request.build_absolute_uri(img.images.url))
@@ -153,14 +155,14 @@ def fetch_employee(request):
 
 
         return paginator.get_paginated_response({
-            "Status": "Success",
-            "Data": new_employee
+            "status": "Success",
+            "data": new_employee
         }) 
 
     except Exception as e:
         return Response({
-            "Status":"Failed",
-            "Messsage":str(e),
+            "status":"Error",
+            "message":str(e),
         },status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -180,9 +182,8 @@ def search_employee(request):
 
         if not employees.exists():
             return Response({
-                "Status": "Failed",
-                "Message": "Employee Not Found",
-                "Data": []
+                "status": "Failed",
+                "message": "Employee Not Found",
             }, status=status.HTTP_404_NOT_FOUND)
 
         employee_data = []
@@ -201,16 +202,16 @@ def search_employee(request):
             })
 
         return Response({
-            "Status":"Success",
-            "Message":"Search Successful",
-            "Data":employee_data
+            "status":"Success",
+            "message":"Search Successful",
+            "data":employee_data
         }, status=status.HTTP_200_OK)
 
     except Exception as e:
         return Response({
-            "Status":"Failed",
-            "Message":str(e),
-        }, status=status.HTTP_400_BAD_REQUEST)
+            "status":"Error",
+            "message":str(e),
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['PUT','PATCH'])
 @transaction.atomic
@@ -220,9 +221,9 @@ def update_employee(request):
 
         if not id:
             return Response({
-                "Status":"Failed",
-                "Data":"Please Provide requer field(id)"
-            })
+                "status":"Failed",
+                "message":"Please Provide requer field(id)"
+            },status=status.HTTP_404_NOT_FOUND)
         
         employee=Employee.objects.get(emp_id=id)
         employee.emp_name=request.data.get('emp_name')
@@ -239,15 +240,15 @@ def update_employee(request):
         employee.save()
 
         return Response({
-            'Status':"Successfully",
-            "Message":"Updated Sucessully",
+            'status':"Successfully",
+            "message":"Updated Sucessully",
         },status.HTTP_200_OK)
     
     except Exception as e:
         return Response({
-            "Status":"Failed",
-            "Message":str(e),
-        },status=status.HTTP_400_BAD_REQUEST)
+            "status":"Error",
+            "message":str(e),
+        },status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 
@@ -259,35 +260,25 @@ def delete_employee(request):
 
         if id is None:
             return Response({
-                "Status":"Failed",
-                "Message":"Provide requir fileld  id",
-                "Data":"Not Found"
+                "status":"Failed",
+                "message":"Provide requir fileld  id",
             })
         
         
         employee=Employee.objects.get(emp_id=id)
 
-        employee_data={
-            "Data":{
-                "Id":employee.emp_id,
-                "Name":employee.emp_name
-            }
-        }
-
         employee.delete()
       
         return Response({
-            "Status":"Deleted Sucesfully",
-            "Message":"Remove {employee.emp_name}Employee",
-            "Data": employee_data
+            "status":"Deleted Sucesfully",
+            "message":"Remove {employee.emp_name}Employee",
         },status=status.HTTP_204_NO_CONTENT)
     
     except Exception as e:
         return Response({
-            "Status":"Failed",
-            "Message":str(e),
-            "Data":"Not found"
-        },status=status.HTTP_400_BAD_REQUEST)
+            "status":"Error",
+            "message":str(e),
+        },status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     
 @api_view(['POST'])
