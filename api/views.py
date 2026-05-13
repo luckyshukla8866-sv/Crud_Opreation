@@ -11,6 +11,7 @@ from rest_framework import status
 from .pagination import StudentPagination,EmployeePagination,EmployeeCursorPagination
 from django.db.models import Q
 from django.core.paginator import Paginator, EmptyPage
+from datetime import datetime
 
 # Create your views here.
 @api_view(['POST'])
@@ -24,20 +25,20 @@ def create_employee(request):
         
         if name is None:
             return Response({
-                    "status":"Failed",
-                    "message":"Please Provide requierd fileds name",
+                    "status":"failed",
+                    "message":"please provide requierd fileds name",
                 },status=status.HTTP_404_NOT_FOUND)
         
         if  salary is None:
             return Response({
-                    "status":"Failed",
-                    "message":"Please Provide requierd fileds salary",
+                    "status":"failed",
+                    "message":"please provide requierd fileds salary",
                 },status=status.HTTP_404_NOT_FOUND)
         
         if not isinstance(name,str):
             return Response({   
-                "status":"Failed",
-                "message":"Name must be String",
+                "status":"failed",
+                "message":"name must be string",
             },status=status.HTTP_404_NOT_FOUND)
         
         employee=Employee.objects.create(emp_name=name,emp_salary=salary)
@@ -50,13 +51,13 @@ def create_employee(request):
         Salarylog.objects.create(employee=employee,amount=salary)
         
         return Response({
-            "status":"Sucessfully",
-            "message":"Created Employee Detail",
+            "status":"sucessfully",
+            "message":"created employee detail",
         },status=status.HTTP_201_CREATED)
     
     except Exception as e :
         return Response({
-            "status" :"Error",
+            "status" :"failed",
             "messge": str(e),
         },status=status.HTTP_500_INTERNAL_SERVER_ERROR) 
     
@@ -82,11 +83,13 @@ def fetch_cursor_employee(request):
 
             new_employee.append(data_dict)
 
+        data=paginator.get_paginated_response(new_employee)
 
-        return paginator.get_paginated_response({
-            "Status": "Success",
-            "Data": new_employee
-        }) 
+        return Response({
+            "status": "successfully",
+            "message":"search Employee Detail",
+            "data": data,
+        },status=status.HTTP_200_OK) 
 
     except Exception as e:
         return Response({
@@ -95,12 +98,28 @@ def fetch_cursor_employee(request):
         },status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-@api_view(['GET'])
+@api_view(['POST'])
 def fetch_employee(request):
     try:
-        page_number =request.query_params.get('page',1)       
-        page_size= request.query_params.get('page_size',3)  
+        id=request.data.get('emp_id')
+        search = request.data.get('search')
+        page_number =request.data.get('page')       
+        page_size= request.data.get('page_size')  
+        start_date=request.data.get('start_date')
+        end_date=request.data.get('end_date')
 
+        if not page_number:
+            return Response({
+                "status":"failed",
+                "message":"please provide requierd fileds(page)",
+                },status=status.HTTP_400_BAD_REQUEST)
+        
+        if not page_size:
+            return Response({
+                "status":"failed",
+                "message":"please provide requierd fileds(page_size)",
+                },status=status.HTTP_400_BAD_REQUEST)
+          
         try:
             page_number = int(page_number)
             page_size = int(page_size)
@@ -108,38 +127,44 @@ def fetch_employee(request):
         except ValueError:
             return Response({
                 "status" : "failed", 
-                "message" : "Page_number and page_size must be integer"},
+                "message" : "page_number and page_size must be integer"},
                 status=status.HTTP_400_BAD_REQUEST)
         
         if page_number <= 0 or page_size <= 0:
             return Response({
                 "status":"failed" ,
-                "message":"Page and page_size must be greater than 0"
+                "message":"page and page_size must be greater than 0"
                 },status=status.HTTP_400_BAD_REQUEST)
         
-        employee = Employee.objects.all()
+        try:
+            employees = Employee.objects.all()
+            if id:
+                employees = Employee.objects.filter(emp_id= id)
 
-        if not employee.exists():
+        except Employee.DoesNotExist:
             return Response({
-                "Status":  "Failed",
-                "Message": "No employees found"
-            }, status=status.HTTP_404_NOT_FOUND)
+                "status":"failed",
+                "message":"employee not found",
+            },status=status.HTTP_404_NOT_FOUND)
         
-        try: 
-            paginator=EmployeePagination()
-            paginator.page_size=min(page_size, paginator.max_page_size)
-            paginated_employee = paginator.paginate_queryset(employee, request)
+        if search:
+            employees = employees.filter(Q(emp_name__icontains = search) | Q(emp_salary__icontains = search) )
+
+        if start_date and end_date:  
+            employees=Employee.objects.filter(created_at__date__range=[start_date, end_date])
+
+
+        paginator = Paginator(employees,page_size)
+        try:
+            paginator_data = paginator.page(page_number)
         except:
             return Response({
                 "status":"failed" ,
                 "message": "Page number out of range"
-                },status=status.HTTP_404_NOT_FOUND)
-
-        if paginated_employee is None:            
-            paginated_employee= list(employee)
+                },status=status.HTTP_501_NOT_IMPLEMENTED)
 
         new_employee=[]
-        for item in paginated_employee:
+        for item in paginator_data:
             image=[]
             for img in item.images.all():
                 image.append(request.build_absolute_uri(img.images.url))
@@ -148,23 +173,30 @@ def fetch_employee(request):
                 "ID":item.emp_id,
                 "Name":item.emp_name,
                 "Salary":item.emp_salary,
-                "Image":image
+                "Image":image,
+                "Date":item.created_at.strftime("%Y-%m-%d %I:%M %p"),
             }
 
             new_employee.append(data_dict)
 
+        
 
-        return paginator.get_paginated_response({
-            "status": "Success",
-            "data": new_employee
-        }) 
+        return Response({
+            "status":"success",
+            "message":"Fetch student data...",
+            "total_pages": paginator.num_pages,
+            "current_page": page_number,
+            "total_items": paginator.count,
+            "employee":new_employee
+            },
+            status=status.HTTP_200_OK
+            ) 
 
     except Exception as e:
         return Response({
-            "status":"Error",
+            "status":"error",
             "message":str(e),
         },status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
 
 
 @api_view(['POST'])
@@ -182,14 +214,15 @@ def search_employee(request):
 
         if not employees.exists():
             return Response({
-                "status": "Failed",
-                "message": "Employee Not Found",
+                "status": "failed",
+                "message": "employee not found",
             }, status=status.HTTP_404_NOT_FOUND)
 
         employee_data = []
 
-        images=[]
+        
         for employee in employees:
+            images=[]
             for img in employee.images.all():
                 images.append(request.build_absolute_uri(img.images.url))
              
@@ -202,14 +235,20 @@ def search_employee(request):
             })
 
         return Response({
-            "status":"Success",
-            "message":"Search Successful",
+            "status":"success",
+            "message":"search successful",
             "data":employee_data
         }, status=status.HTTP_200_OK)
 
+    except Employee.DoesNotExist:
+        return Response({
+            "status":"error",
+            "message":"does not exist",
+        }, status=status.HTTP_404_NOT_FOUND)
+    
     except Exception as e:
         return Response({
-            "status":"Error",
+            "status":"error",
             "message":str(e),
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -221,8 +260,8 @@ def update_employee(request):
 
         if not id:
             return Response({
-                "status":"Failed",
-                "message":"Please Provide requer field(id)"
+                "status":"failed",
+                "message":"please Provide requer field(id)"
             },status=status.HTTP_404_NOT_FOUND)
         
         employee=Employee.objects.get(emp_id=id)
@@ -240,9 +279,15 @@ def update_employee(request):
         employee.save()
 
         return Response({
-            'status':"Successfully",
-            "message":"Updated Sucessully",
-        },status.HTTP_200_OK)
+            'status':"successfully",
+            "message":"updated Sucessully",
+        },status=status.HTTP_200_OK)
+    
+    except Employee.DoesNotExist:
+        return Response({
+            "status":"error",
+            "message":"does not exist",
+        }, status=status.HTTP_404_NOT_FOUND)
     
     except Exception as e:
         return Response({
@@ -260,23 +305,31 @@ def delete_employee(request):
 
         if id is None:
             return Response({
-                "status":"Failed",
-                "message":"Provide requir fileld  id",
-            })
+                "status":"failed",
+                "message":"please Provide requer field(id)"
+            },status=status.HTTP_404_NOT_FOUND)
         
         
         employee=Employee.objects.get(emp_id=id)
-
+        print(employee)
+        name=employee.emp_name
         employee.delete()
-      
+        print(name)
+
         return Response({
-            "status":"Deleted Sucesfully",
-            "message":"Remove {employee.emp_name}Employee",
-        },status=status.HTTP_204_NO_CONTENT)
+            "status":"deleted Sucesfully",
+            "message":f"remove {name} Employee",
+        },status=status.HTTP_200_OK)
     
+    except Employee.DoesNotExist:
+        return Response({
+            "status":"failed",
+            "message":"employee data not found",
+        },status=status.HTTP_404_NOT_FOUND)
+
     except Exception as e:
         return Response({
-            "status":"Error",
+            "status":"error",
             "message":str(e),
         },status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -288,24 +341,37 @@ def create_students(request):
         std_age=request.data.get('age')
         std_email=request.data.get('email')
         
-        if std_name is None or std_age is None or std_email is None:
+        if std_name is None:
             return Response({
-                "Status" : "Failed",
-                "Errors":"Please Provide all requierd fileds(name,age,email)"
-            })
+                "status":"failed",
+                "message":"please Provide requer field(name)"
+            },status=status.HTTP_404_NOT_FOUND)
+        
+        if std_age is None :
+            return Response({
+                "status":"failed",
+                "message":"please Provide requer field(age)"
+            },status=status.HTTP_404_NOT_FOUND)
+        
+        if std_email is None:
+            return Response({
+                "status":"failed",
+                "message":"please Provide requer field(email)"
+            },status=status.HTTP_404_NOT_FOUND)
+
         
         Student.objects.create(name=std_name,age=std_age,email=std_email)
         
         return Response({
-            "Status": "Successfully",
-            "Data": "Successfully created Student"
-        })
+            "status":"sucessfully",
+            "message":"created employee detail",
+        },status=status.HTTP_201_CREATED)
     
-    except Exception as e:
+    except Exception as e :
         return Response({
-            "Status": "Failed",
-            "Errors":str(e)
-        })
+            "status" :"failed",
+            "messge": str(e),
+        },status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
 
 @api_view(['GET'])
@@ -318,16 +384,17 @@ def get_students(request):
 
         serializer=StudentSerializer(paginated_student,many=True)
 
+
         return paginator.get_paginated_response({
-            "Status": "Success",
+            "status": "Success",
             "Data": serializer.data
         })
     
-    except Exception as e:
+    except Exception as e :
         return Response({
-            "Status" : "Failed",
-            "Errors" : str(e)
-        },status=status.HTTP_400_BAD_REQUEST)
+            "status" :"failed",
+            "messge": str(e),
+        },status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['PUT', 'PATCH'])
 def update_student(request):
@@ -335,9 +402,9 @@ def update_student(request):
         id=request.data.get("id")
         if id is None:
             return Response({
-                "Status" : "Failed",
-                "Errors" : "Please provide the student id"
-            })
+                "status":"failed",
+                "message":"please Provide requer field(id)"
+            },status=status.HTTP_404_NOT_FOUND)
         
         students=Student.objects.get(id=id)
         students.name=request.data.get('name')
@@ -347,13 +414,15 @@ def update_student(request):
         students.save()
 
         return Response({
-            "Status":"Success",
-            "Data": "Successfully updates Student"})
+            "status":"sucessfully",
+            "message":"created employee detail",
+        },status=status.HTTP_201_CREATED)
 
-    except Student.DoesNotExist:
+    except Employee.DoesNotExist:
         return Response({
-            "Status" : "Failed",
-            "Errors": "Student not found"})
+            "status":"error",
+            "message":"does not exist",
+        }, status=status.HTTP_404_NOT_FOUND)
     
     
 @api_view(['DELETE'])
@@ -362,21 +431,30 @@ def delete_student(request):
         id=request.data.get('id')
         if id is None:
             return Response({
-                "Status" : "Failed",
-                "Errors" : "Please provide the student id"
-            })
+                "status":"failed",
+                "message":"please Provide requer field(id)"
+            },status=status.HTTP_404_NOT_FOUND)
         
         students=Student.objects.get(id=id)
         students.delete()
+
         return Response({
-            "Status" : "Success",
-            "Errors" : "Successfully deleted Student"
-        })
+            "status":"deleted Sucesfully",
+            "message":f"remove student",
+        },status=status.HTTP_200_OK)
+    
     except Student.DoesNotExist:
         return Response({
-            "Status" : "Failed",
-            "Errors" : "Student not found"
-        })
+            "status":"error",
+            "message":"does not exist",
+        }, status=status.HTTP_404_NOT_FOUND)
+    
+    except Exception as e :
+        return Response({
+            "status" :"failed",
+            "messge": str(e),
+        },status=status.HTTP_500_INTERNAL_SERVER_ERROR) 
+        
       
 @api_view(['POST'])
 def create_course(request):
@@ -384,34 +462,32 @@ def create_course(request):
         course_name=request.data.get("course_name")
         student_id=request.data.get("student_id")
 
-        if course_name is None or student_id is None:
+        if course_name is None:
             return Response({
-                "Status":"Failed",
-                "Data":"Please provide the course name and student id"
-            })
+                "status":"failed",
+                "message":"please Provide requer field(name)"
+            },status=status.HTTP_404_NOT_FOUND)
         
-        if not isinstance(course_name,str):
+        if student_id is None:
             return Response({
-                "Status":"Failed",
-                "Data":"Couese name must be String"
-            })
+                "status":"failed",
+                "message":"please Provide requer field(id)"
+            },status=status.HTTP_404_NOT_FOUND)
+        
                
         student=Student.objects.get(id=student_id)
         course=Course.objects.create(course_name=course_name,student=student)
 
         return Response({
-            "Status" : "Successfully",
-            "Data": {
-                "Course_name":course.course_name,
-                "Student":student.name
-            }
-        })
+            "status":"sucessfully",
+            "message":"created student detail",
+        },status=status.HTTP_201_CREATED)
 
-    except Student.DoesNotExist as e:
+    except Student.DoesNotExist:
         return Response({
-            "Status":"Failed",
-            "Data":str(e)
-        })
+            "status":"error",
+            "message":"does not exist",
+        }, status=status.HTTP_404_NOT_FOUND)
 
 @api_view(['GET'])
 def get_course(request):
@@ -421,15 +497,16 @@ def get_course(request):
         serializer=CourseSerializer(courses,many=True)
 
         return Response({
-            "Status":"Successfully",
-            "Data":serializer.data
-        })
+            "status":"successfully",
+            "message":"detail of course",
+            "data":serializer.data
+        },status=status.HTTP_200_OK)
     
-    except Exception as e:
+    except Exception as e :
         return Response({
-            "Status":"Failed",
-            "Data":str(e)
-        })
+            "status" :"failed",
+            "messge": str(e),
+        },status=status.HTTP_500_INTERNAL_SERVER_ERROR) 
 
 @api_view(['GET'])
 def fetch_all(rerquest):
@@ -440,16 +517,16 @@ def fetch_all(rerquest):
         course_serializer=CourseSerializer(courses,many=True)
 
         return Response({
-            "Status":"Successfully",
-            "Students":student_serializer.data,
+            "status":"successfully",
+            "students":student_serializer.data,
             "courses":course_serializer.data
-        })
+        },status=status.HTTP_200_OK)
     
-    except Exception as e:
+    except Exception as e :
         return Response({
-            "Status":"Failed",
-            "Data":str(e)
-        })
+            "status" :"failed",
+            "messge": str(e),
+        },status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
 
 
@@ -459,24 +536,24 @@ def update_course(request):
         id = request.data.get("course_id")
         if id is None:
             return Response({
-                "Status":"Failed",
-                "Data":"Enter a Valid Id"
-            })
+                "status":"failed",
+                "message":"please Provide requer field(id)"
+            },status=status.HTTP_404_NOT_FOUND)
         
         course=Course.objects.get(id=id)
         course.course_name=request.data.get('course_name')
         course.save()
 
         return Response({
-            "Status":"Successfully",
-            "Data":"Course updated sucessfully"
-        })
+            "status":"success",
+            "message":"udate successful",
+        }, status=status.HTTP_200_OK)
 
-    except Course.DoesNotExist as e:
+    except Course.DoesNotExist:
         return Response({
-            "Status":"Failed",
-            "Data":str(e)
-        })
+            "status":"error",
+            "message":"does not exist",
+        }, status=status.HTTP_404_NOT_FOUND)
 
 @api_view(['DELETE'])
 def delete_course(request):
@@ -484,20 +561,23 @@ def delete_course(request):
         id=request.data.get('course_id')
         if id is None:
             return Response({
-                "status":"Falied",
-                "Data":"Please enter a valid course id"
-            })
+                "status":"failed",
+                "message":"please Provide requer field(id)"
+            },status=status.HTTP_404_NOT_FOUND)
+        
         course=Course.objects.get(id=id)
         course.delete()
+
         return Response({
-            "Status":"Sucessfully",
-            "Data":"Course deleted successfully"
-        })
-    except Course.DoesNotExist as e:
+            "status":"deleted Sucesfully",
+            "message":f"remove student",
+        },status=status.HTTP_200_OK)
+    
+    except Course.DoesNotExist:
         return Response({
-            "Status":"Failed",
-            "Data":str(e)
-        })
+            "status":"error",
+            "message":"does not exist",
+        }, status=status.HTTP_404_NOT_FOUND)
 
 
 

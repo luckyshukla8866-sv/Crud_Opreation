@@ -73,6 +73,13 @@ TEMPLATES = [
 WSGI_APPLICATION = 'Crud_project.wsgi.application'
 
 REST_FRAMEWORK = {
+    'DATETIME_FORMAT': "%Y-%m-%d %H:%M:%S",
+    'DATE_FORMAT': "%Y-%m-%d",
+    'TIME_FORMAT': "%H:%M:%S",
+
+   
+    'DATETIME_INPUT_FORMATS': ["%Y-%m-%d %H:%M:%S", "iso-8601"],
+    'DATE_INPUT_FORMATS': ["%Y-%m-%d", "iso-8601"],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.LimitOffsetPagination',
     'PAGE_SIZE': 100
 }
